@@ -8,5 +8,5 @@ pages_build_output_dir = "build"
 [[d1_databases]]
 binding = "DB"
 database_name = "travel-planner-db"
-database_id = "b549fbee-3a7c-44e8-b726-4086beb25576"
+database_id = "b5acdfab-4fff-4600-8434-d4ae3256cb0c"
 
