@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>키워드 페이지</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(to bottom, rgba(0, 183, 208, 0.5) 0%, #ffffff 100%);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: 'Pretendard', sans-serif;
+    }
+
+    .outer-box {
+      width: 900px;
+      height: 1000px;
+      background-color: rgba(255, 255, 255, 0.95);
+      border-radius: 16px;
+      box-shadow: -9px 12px 76px rgba(0, 0, 0, 0.2);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      border: 1px solid #dddddd;
+    }
+
+    .inner-box {
+      width: calc(100% - 80px);
+      height: calc(100% - 80px);
+      padding: 40px 40px;
+      background-color: rgba(255, 255, 255, 0.8);
+      border-radius: 12px;
+      border: 1px solid rgba(0, 183, 208, 0.2);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      position: relative;
+    }
+
+    .fraction-text {
+      position: absolute;
+      top: 40px;
+      right: 40px;
+      font-family: 'Pretendard', sans-serif;
+      font-weight: 700;
+      font-size: 24px;
+    }
+
+    .arrow-left, .arrow-right {
+      position: absolute;
+      bottom: 40px;
+      width: 40px;
+      height: auto;
+    }
+
+    .arrow-left {
+      left: 40px;
+      transform: scaleX(-1);
+    }
+
+    .arrow-right {
+      right: 40px;
+    }
+
+    .new-layer {
+      width: 600px;
+      height: 730px;
+      background-color: rgba(255, 255, 255, 0.9);
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .black-square {
+      width: 122px;
+      height: 122px;
+      background-color: #000000;
+      margin-bottom: 30px;
+    }
+
+    .custom-text {
+      font-family: 'Pretendard', sans-serif;
+      color: #333;
+      font-size: 30px;
+      font-weight: 600;
+    }
+
+    .gray-bar {
+      width: 600px;
+      height: 3px;
+      background-color: #dddddd;
+      margin-top: 20px;
+    }
+
+    .keyword-container {
+      display: flex;
+      gap: 20px;
+      margin-top: 20px;
+      justify-content: center;
+    }
+
+    .keyword-box {
+      width: 120px;
+      height: 35px;
+      border: 1px solid #00b7d0;
+      border-radius: 16px;
+      background-color: rgba(255, 255, 255, 0.8);
+      font-family: 'Pretendard', sans-serif;
+      font-size: 16px;
+      text-align: center;
+      line-height: 35px;
+      color: #333;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      font-weight: 600;
+    }
+
+    .keyword-box.active {
+      background-color: #00b7d0;
+      color: #ffffff;
+    }
+
+    h3 {
+      font-weight: 700;
+      color: #00b7d0;
+      margin-bottom: 24px;
+    }
+
+    h6 {
+      font-weight: 400;
+      color: #333;
+      margin-bottom: 16px;
+      font-size: 1.25rem;
+    }
+
+    p {
+      color: #666;
+      line-height: 1.6;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="outer-box">
+    <div class="inner-box">
+      <div class="fraction-text">1/5</div>
+      <img src="화살표.png" class="arrow-left" alt="왼쪽 화살표">
+      <img src="화살표.png" class="arrow-right" alt="오른쪽 화살표">
+      <div class="new-layer">
+        <div class="black-square"></div>
+        <div class="custom-text">입국 시간을 선택해 주세요.</div>
+        <div class="gray-bar"></div>
+        <div class="keyword-container">
+          <div class="keyword-box">키워드1</div>
+          <div class="keyword-box">키워드2</div>
+          <div class="keyword-box">키워드3</div>
+          <div class="keyword-box">키워드4</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const keywordBoxes = document.querySelectorAll('.keyword-box');
+    
+    keywordBoxes.forEach(box => {
+      box.addEventListener('click', function() {
+        // Remove active class from all boxes
+        keywordBoxes.forEach(b => b.classList.remove('active'));
+        // Add active class to clicked box
+        this.classList.add('active');
+      });
+    });
+  });
+</script>
+</html>
