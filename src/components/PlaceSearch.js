@@ -86,6 +86,28 @@ const PlaceSearch = ({ center, onPlaceSelect, onPlacesFound, selectedPlace, onBa
   const [timeInput, setTimeInput] = useState('');
   const [descriptionInput, setDescriptionInput] = useState('');
 
+  const normalizeTimeInput = (value) => {
+    if (!value) return '';
+    const str = String(value).trim();
+    if (!str) return '';
+
+    const parts = str.split(':');
+
+    // "11" -> "11:00" 처럼 정수 시간만 들어온 경우
+    if (parts.length === 1) {
+      const h = Number(parts[0]);
+      if (Number.isNaN(h)) return str;
+      return `${String(h).padStart(2, '0')}:00`;
+    }
+
+    let [hours, minutes] = parts;
+    const hNum = Number(hours);
+    const mNum = Number(minutes || '0');
+    if (Number.isNaN(hNum) || Number.isNaN(mNum)) return str;
+
+    return `${String(hNum).padStart(2, '0')}:${String(mNum).padStart(2, '0')}`;
+  };
+
   // center가 없을 경우 도쿄 중심 좌표를 기본값으로 사용
   const getEffectiveCenter = () => {
     if (center && center.lat && center.lng) return center;
@@ -538,7 +560,7 @@ const PlaceSearch = ({ center, onPlaceSelect, onPlacesFound, selectedPlace, onBa
                         >
                           {days && days.length > 0 ? (
                             days.map((day, idx) => (
-                              <option key={idx} value={idx}>{`${idx + 1}일차${day.date ? ` (${day.date})` : ''}`}</option>
+                              <option key={idx} value={idx}>{`${idx + 1}일차`}</option>
                             ))
                           ) : (
                             <option value={0}>1일차</option>
@@ -580,7 +602,9 @@ const PlaceSearch = ({ center, onPlaceSelect, onPlacesFound, selectedPlace, onBa
                       const targetIndex = selectedDayIndex >= 0 && selectedDayIndex < days.length
                         ? selectedDayIndex
                         : 0;
-                      onAddToItinerary(detailPlace, targetIndex, timeInput.trim(), descriptionInput.trim());
+                      const normalizedTime = normalizeTimeInput(timeInput.trim());
+                      if (!normalizedTime) return;
+                      onAddToItinerary(detailPlace, targetIndex, normalizedTime, descriptionInput.trim());
                     }}
                   >
                     이 일정에 추가

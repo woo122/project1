@@ -25,7 +25,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 
-const TravelItinerary = ({ itinerary, onRegenerateClick, onReplan, loading, isEditMode, onToggleEdit, onRemoveActivity, onAddActivity, onSave, onOpenMyItineraries }) => {
+const TravelItinerary = ({ itinerary, itineraryId, onRegenerateClick, onReplan, loading, isEditMode, onToggleEdit, onRemoveActivity, onAddActivity, onSave, onOpenMyItineraries }) => {
   const navigate = useNavigate();
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [showMyMenu, setShowMyMenu] = useState(false);
@@ -147,6 +147,14 @@ const TravelItinerary = ({ itinerary, onRegenerateClick, onReplan, loading, isEd
     setSelectedAttraction(null);
   }, [activeDay]);
 
+  useEffect(() => {
+    setSelectedPlace(null);
+    setShowAttractionDetail(false);
+    setSelectedAttraction(null);
+    setSelectedActivityMarker(null);
+    setMapFocus(null);
+  }, [itinerary]);
+
   console.log('TravelItinerary received:', itinerary);
   console.log('destinations:', itinerary?.destinations);
   console.log('dailySchedule:', itinerary?.dailySchedule);
@@ -192,6 +200,24 @@ const TravelItinerary = ({ itinerary, onRegenerateClick, onReplan, loading, isEd
     
     // 기본값: 도쿄 중심
     return { lat: 35.6762, lng: 139.6503 };
+  };
+
+  const formatTime = (time) => {
+    if (!time) return '';
+    const str = String(time).trim();
+    if (!str) return '';
+    const parts = str.split(':');
+    let hours = parts[0];
+    let minutes = parts[1] != null && parts[1] !== '' ? parts[1] : '00';
+    const hNum = Number(hours);
+    const mNum = Number(minutes);
+    if (!Number.isNaN(hNum)) {
+      hours = String(hNum).padStart(2, '0');
+    }
+    if (!Number.isNaN(mNum)) {
+      minutes = String(mNum).padStart(2, '0');
+    }
+    return `${hours}:${minutes}`;
   };
 
   const handleAddPlaceToItinerary = (place, targetDayIndex, time, description) => {
@@ -284,12 +310,14 @@ const TravelItinerary = ({ itinerary, onRegenerateClick, onReplan, loading, isEd
     }
   };
 
+  const activityCountForActiveDay = itinerary?.dailySchedule?.[activeDay]?.activities?.length || 0;
+
   return (
     <Box sx={{ position: 'fixed', inset: 0 }}>
       {/* Background map fills the screen; show markers only for active day attractions */}
       <Box sx={{ position: 'absolute', inset: 0, zIndex: 0 }}>
         <TravelMap 
-          key={`map-${activeDay}-${viewMode}`}
+          key={`map-${activeDay}-${viewMode}-${activityCountForActiveDay}`}
           destinations={viewMode === 'schedule' ? itinerary.destinations : []}
           dailySchedule={viewMode === 'schedule' ? [itinerary?.dailySchedule?.[activeDay]] : []}
           activityNames={viewMode === 'schedule' ? itinerary?.dailySchedule?.[activeDay]?.activities || []
@@ -340,7 +368,7 @@ const TravelItinerary = ({ itinerary, onRegenerateClick, onReplan, loading, isEd
         />
       </Box>
 
-      {/* Top-right global action: 일정 다시짜기 + 내보내기 */}
+      {/* Top-right global action: 일정 다시짜기 + 텍스트 내보내기 */}
       <Box sx={{ position: 'absolute', right: 16, top: 16, zIndex: 1300, display: 'flex', gap: 1 }}>
         <Button 
           variant="contained" 
@@ -352,22 +380,21 @@ const TravelItinerary = ({ itinerary, onRegenerateClick, onReplan, loading, isEd
           일정 다시짜기
         </Button>
         <Button
-          variant="outlined"
+          variant="contained"
           color="inherit"
           size="small"
           onClick={handleExportText}
           disabled={!!loading}
+          sx={{
+            bgcolor: '#000000',
+            color: '#ffffff',
+            '&:hover': {
+              bgcolor: '#222222',
+              color: '#ffffff'
+            }
+          }}
         >
           텍스트 출력
-        </Button>
-        <Button
-          variant="outlined"
-          color="inherit"
-          size="small"
-          onClick={handleExportPdf}
-          disabled={!!loading}
-        >
-          PDF 출력
         </Button>
       </Box>
 
@@ -447,7 +474,15 @@ const TravelItinerary = ({ itinerary, onRegenerateClick, onReplan, loading, isEd
               variant="contained"
               size="small"
               sx={{ textTransform: 'none', color: 'white' }}
-              onClick={() => navigate('/login')}
+              onClick={() =>
+                navigate('/login', {
+                  state: {
+                    from: '/itinerary',
+                    itinerary,
+                    itineraryId
+                  }
+                })
+              }
             >
               로그인 하러 가기
             </Button>
@@ -529,20 +564,18 @@ const TravelItinerary = ({ itinerary, onRegenerateClick, onReplan, loading, isEd
           </Box>
         )}
 
-        {/* 뷰 모드 전환 탭 (고정) - 상세 뷰가 아닐 때만 표시 */}
-        {!showAttractionDetail && (
-          <Box sx={{ position: 'sticky', top: 0, zIndex: 10 }}>
-            <Tabs
-              value={viewMode}
-              onChange={(e, newValue) => setViewMode(newValue)}
-              variant="fullWidth"
-              sx={{ borderBottom: 1, borderColor: 'divider' }}
-            >
-              <Tab value="schedule" label="일정" />
-              <Tab value="search" label="검색" />
-            </Tabs>
-          </Box>
-        )}
+        {/* 뷰 모드 전환 탭 (고정) */}
+        <Box sx={{ position: 'sticky', top: 0, zIndex: 10 }}>
+          <Tabs
+            value={viewMode}
+            onChange={(e, newValue) => setViewMode(newValue)}
+            variant="fullWidth"
+            sx={{ borderBottom: 1, borderColor: 'divider' }}
+          >
+            <Tab value="schedule" label="일정" />
+            <Tab value="search" label="검색" />
+          </Tabs>
+        </Box>
 
         {/* 일정 뷰 */}
         {viewMode === 'schedule' && (
@@ -575,8 +608,20 @@ const TravelItinerary = ({ itinerary, onRegenerateClick, onReplan, loading, isEd
             </Tabs>
             <Divider sx={{ mb: 2 }} />
             
-            {/* AI 생성 표시 */}
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+            {/* AI 생성 표시 + Day 헤더 (탭 아래에 고정) */}
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                mb: 1,
+                position: 'sticky',
+                top: 48,
+                zIndex: 90,
+                bgcolor: 'white',
+                p: 1
+              }}
+            >
               <Box>
                 {itinerary.isAIGenerated && (
                   <Box sx={{ 
@@ -598,20 +643,32 @@ const TravelItinerary = ({ itinerary, onRegenerateClick, onReplan, loading, isEd
                   Day {activeDay + 1}
                 </Typography>
               </Box>
-              <Box sx={{ display: 'flex', gap: 1 }}>
-                {onToggleEdit && (
-                  <Button
-                    variant="outlined"
-                    color={isEditMode ? 'secondary' : 'inherit'}
-                    size="small"
-                    startIcon={<EditIcon />}
-                    onClick={onToggleEdit}
-                    disabled={!!loading}
-                  >
-                    수정
-                  </Button>
-                )}
-              </Box>
+              <Box sx={{ display: 'flex', gap: 1, flexDirection: 'row-reverse' }}>
+              {onToggleEdit && (
+                <Button
+                  variant="outlined"
+                  color={isEditMode ? 'secondary' : 'inherit'}
+                  size="small"
+                  startIcon={<EditIcon />}
+                  onClick={onToggleEdit}
+                  disabled={!!loading}
+                >
+                  수정
+                </Button>
+              )}
+              {isEditMode && onAddActivity && (
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    setPendingAddDayIndex(activeDay);
+                    setViewMode('search');
+                  }}
+                >
+                  일정 추가
+                </Button>
+              )}
+            </Box>
             </Box>
             <List>
               {(() => {
@@ -715,12 +772,15 @@ const TravelItinerary = ({ itinerary, onRegenerateClick, onReplan, loading, isEd
                         </Box>
                       ) : (
                         <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', width: '100%' }}>
-                          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600 }}>
-                            {activity.type === 'meal' && '식사'}
-                            {activity.type === 'attraction' && '관광지'}
-                            {activity.type === 'airport' && '공항'}
-                            {activity.type === 'accommodation' && '숙소'}
-                            {activity.type === 'custom' && '사용자 추가'}
+                          <Typography
+                            variant="caption"
+                            sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.9rem' }}
+                          >
+                            {activity.type === 'meal' && '🍽️ 식사'}
+                            {activity.type === 'attraction' && '📍 관광지'}
+                            {activity.type === 'airport' && '✈️ 공항'}
+                            {activity.type === 'accommodation' && '🛏️ 숙소'}
+                            {activity.type === 'custom' && '📝 사용자 추가'}
                             {activity.type !== 'meal' && activity.type !== 'attraction' && activity.type !== 'airport' && activity.type !== 'accommodation' && activity.type !== 'custom' && ''}
                           </Typography>
                           <Box sx={{ display: 'flex', width: '100%', mt: 0.25, alignItems: 'center' }}>
@@ -737,7 +797,7 @@ const TravelItinerary = ({ itinerary, onRegenerateClick, onReplan, loading, isEd
                                 position: 'relative'
                               }}
                             >
-                              {activity.time}
+                              {formatTime(activity.time)}
                             </Typography>
                             <Typography
                               variant="subtitle1"
@@ -798,20 +858,6 @@ const TravelItinerary = ({ itinerary, onRegenerateClick, onReplan, loading, isEd
                 });
               })()}
             </List>
-            {isEditMode && onAddActivity && (
-              <Box sx={{ mt: 2, textAlign: 'right' }}>
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={() => {
-                    setPendingAddDayIndex(activeDay);
-                    setViewMode('search');
-                  }}
-                >
-                  활동 추가
-                </Button>
-              </Box>
-            )}
           </Box>
         )}
 

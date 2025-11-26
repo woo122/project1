@@ -208,13 +208,13 @@ const LandingPage = () => {
                           borderRadius: '50%',
                           overflow: 'hidden',
                           cursor: 'pointer',
-                          border: '2px solid #fff'
+                          border: currentSection === 0 ? '2px solid #fff' : '2px solid #000'
                         }}
                         onClick={(e) => setMenuAnchor(e.currentTarget)}
                       >
                         <Box
                           component="img"
-                          src={'/images/profile.png'}
+                          src={currentSection === 0 ? '/images/profile.png' : '/images/profile2.png'}
                           alt="프로필"
                           sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                         />

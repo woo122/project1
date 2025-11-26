@@ -1,6 +1,22 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { GoogleMap, Marker, InfoWindow, Polyline } from '@react-google-maps/api';
 
+// 단순 RGB 기준으로 명도를 줄이는 헬퍼 (step 0: 원본, step 1: 10% 어둡게, step 2: 20% 어둡게 ...)
+const darkenColor = (hex, step) => {
+  const factor = Math.max(0, 1 - 0.1 * step);
+  const normalizedHex = hex.replace('#', '');
+  const r = parseInt(normalizedHex.substring(0, 2), 16);
+  const g = parseInt(normalizedHex.substring(2, 4), 16);
+  const b = parseInt(normalizedHex.substring(4, 6), 16);
+
+  const nr = Math.max(0, Math.min(255, Math.round(r * factor)));
+  const ng = Math.max(0, Math.min(255, Math.round(g * factor)));
+  const nb = Math.max(0, Math.min(255, Math.round(b * factor)));
+
+  const toHex = (v) => v.toString(16).padStart(2, '0');
+  return `#${toHex(nr)}${toHex(ng)}${toHex(nb)}`.toUpperCase();
+};
+
 // Props:
 // - destinations: 전체 목적지 데이터
 // - dailySchedule: 일별 일정 데이터 (음식점 마커 표시용)
@@ -14,7 +30,8 @@ import { GoogleMap, Marker, InfoWindow, Polyline } from '@react-google-maps/api'
 // - onMapPoiClick?: 지도의 POI 클릭 핸들러
 // - selectedActivityMarker?: 일정 목록에서 선택한 활동
 // - onMarkerNameClick?: InfoWindow의 이름 클릭 핸들러
-const TravelMap = ({ destinations, dailySchedule = [], activityNames = null, focus = null, focusName = null, places = null, onPlaceClick = null, selectedPlaceId = null, onAttractionClick = null, onMapPoiClick = null, selectedActivityMarker = null, onMarkerNameClick = null, selectedAttraction = null }) => {
+// - segmentColors?: 마커 사이 각 구간(세그먼트)의 색상을 순번대로 지정하는 배열
+const TravelMap = ({ destinations, dailySchedule = [], activityNames = null, focus = null, focusName = null, places = null, onPlaceClick = null, selectedPlaceId = null, onAttractionClick = null, onMapPoiClick = null, selectedActivityMarker = null, onMarkerNameClick = null, selectedAttraction = null, segmentColors = null }) => {
   const [selectedMarker, setSelectedMarker] = useState(null);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [hoveredMarkerId, setHoveredMarkerId] = useState(null);
@@ -95,6 +112,42 @@ const TravelMap = ({ destinations, dailySchedule = [], activityNames = null, foc
     return markers;
   }, [dailySchedule]);
   
+  // 같은 위치에 있는 마커들을 하나로 그룹화 (라벨은 '1,8'처럼 묶어서 표시)
+  const groupedMarkerList = useMemo(() => {
+    if (!markerList || markerList.length === 0) return [];
+
+    const map = new Map();
+
+    markerList.forEach((marker) => {
+      const { lat, lng } = marker.location || {};
+      if (typeof lat !== 'number' || typeof lng !== 'number') return;
+
+      const key = `${lat.toFixed(6)}-${lng.toFixed(6)}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          location: { lat, lng },
+          markers: [],
+          sequenceNumbers: [],
+        });
+      }
+      const group = map.get(key);
+      group.markers.push(marker);
+      if (marker.sequenceNumber != null) {
+        group.sequenceNumbers.push(marker.sequenceNumber);
+      }
+    });
+
+    // sequenceNumber 기준 오름차순 정렬
+    const groups = Array.from(map.values()).map((group) => ({
+      ...group,
+      sequenceNumbers: group.sequenceNumbers.sort((a, b) => a - b),
+      // 대표 마커는 가장 작은 sequenceNumber를 가진 마커로 사용
+      representative: group.markers.sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0))[0],
+    }));
+
+    return groups;
+  }, [markerList]);
+  
   // 일정 경로 생성 (각 날짜별로 경로 분리)
   const routePaths = useMemo(() => {
     if (!dailySchedule || dailySchedule.length === 0) return [];
@@ -166,31 +219,57 @@ const TravelMap = ({ destinations, dailySchedule = [], activityNames = null, foc
       onClick={handleMapClick}
       options={{ streetViewControl: false, mapTypeControl: false, fullscreenControl: false }}
     >
-      {/* 일정 경로 라인 (날짜별로 분리) */}
-      {routePaths.map((dayPath, index) => (
-        <Polyline
-          key={`route-${index}`}
-          path={dayPath}
-          options={{
-            strokeColor: '#1e3a8a',
-            strokeOpacity: 0.9,
-            strokeWeight: 3,
-            geodesic: true,
-            zIndex: 1
-          }}
-        />
-      ))}
+      {/* 일정 경로 라인 */}
+      {routePaths.map((dayPath, dayIndex) => {
+        return dayPath.map((point, idx) => {
+          if (idx === dayPath.length - 1) return null;
+          const segmentIndex = idx; // 0: 1-2, 1: 2-3, 2: 3-4 ...
 
-      {/* 순서대로 번호가 표시된 마커들 */}
-      {markerList.map((marker, index) => {
+          const defaultSegmentColors = [
+            '#00AFDB', // 1-2
+            '#1A98B7', // 2-3
+            '#2A7E92', // 3-4
+            '#2F616E', // 4-5
+            '#2A434A', // 5-6
+          ];
+
+          let color = '#000000';
+          if (Array.isArray(segmentColors) && segmentColors[segmentIndex]) {
+            color = segmentColors[segmentIndex];
+          } else if (segmentIndex < defaultSegmentColors.length) {
+            color = defaultSegmentColors[segmentIndex];
+          }
+
+          return (
+            <Polyline
+              key={`route-${dayIndex}-${idx}`}
+              path={[dayPath[idx], dayPath[idx + 1]]}
+              options={{
+                strokeColor: color,
+                strokeOpacity: 0.9,
+                strokeWeight: 3,
+                geodesic: true,
+                zIndex: 1
+              }}
+            />
+          );
+        });
+      })}
+
+      {/* 순서대로 번호가 표시된 마커들 (같은 위치는 1,8처럼 하나로 합침) */}
+      {groupedMarkerList.map((group, index) => {
         const isHovered = hoveredMarkerId === `marker-${index}`;
-        
+        const labelText = group.sequenceNumbers.length > 0
+          ? group.sequenceNumbers.join(',')
+          : '';
+        const representative = group.representative;
+
         return (
           <Marker
             key={`marker-${index}`}
-            position={{ lat: marker.location.lat, lng: marker.location.lng }}
+            position={{ lat: group.location.lat, lng: group.location.lng }}
             label={{
-              text: String(marker.sequenceNumber),
+              text: labelText,
               color: '#ffffff',
               fontSize: isHovered ? '18px' : '16px',
               fontWeight: 'bold'
@@ -205,8 +284,9 @@ const TravelMap = ({ destinations, dailySchedule = [], activityNames = null, foc
               labelOrigin: new window.google.maps.Point(0, 0)
             }}
             onClick={() => {
-              setSelectedMarker(marker);
-              if (onAttractionClick) onAttractionClick(marker);
+              // 대표 마커 기준으로 동작 (InfoWindow 및 상세 동작)
+              setSelectedMarker(representative);
+              if (onAttractionClick) onAttractionClick(representative);
             }}
             onMouseOver={() => setHoveredMarkerId(`marker-${index}`)}
             onMouseOut={() => setHoveredMarkerId(null)}

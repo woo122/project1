@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { Box, TextField, Button, Typography, Paper, Alert } from '@mui/material';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState(null);
@@ -30,6 +31,59 @@ const LoginPage = () => {
       }
 
       localStorage.setItem('tp_user', JSON.stringify(data.user));
+
+      // 일정 페이지에서 넘어온 경우: 로그인 후 방금 일정을 자동으로 저장하고 다시 일정 페이지로 이동
+      const redirectState = location.state;
+      if (redirectState && redirectState.from === '/itinerary' && redirectState.itinerary) {
+        try {
+          const userId = data.user?.id;
+          if (userId) {
+            const title = redirectState.itinerary.title || '나의 도쿄 여행';
+
+            // 기존 일정 ID가 있으면 업데이트, 없으면 새로 생성
+            const hasItineraryId = !!redirectState.itineraryId;
+            const resSave = await fetch('/api/itineraries', {
+              method: hasItineraryId ? 'PUT' : 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(
+                hasItineraryId
+                  ? {
+                      id: redirectState.itineraryId,
+                      userId,
+                      title,
+                      itinerary: redirectState.itinerary
+                    }
+                  : {
+                      userId,
+                      title,
+                      itinerary: redirectState.itinerary
+                    }
+              )
+            });
+
+            const saved = await resSave.json().catch(() => null);
+            const newId = hasItineraryId
+              ? redirectState.itineraryId
+              : saved && saved.ok
+                ? saved.id
+                : null;
+
+            navigate('/itinerary', {
+              state: {
+                itinerary: redirectState.itinerary,
+                itineraryId: newId
+              }
+            });
+            setLoading(false);
+            return;
+          }
+        } catch (e) {
+          // 저장 실패 시에는 그냥 기본 홈으로 이동
+        }
+      }
+
       navigate('/');
     } catch (err) {
       setError('로그인 중 오류가 발생했습니다.');

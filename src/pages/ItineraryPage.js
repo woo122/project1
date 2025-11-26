@@ -85,37 +85,57 @@ const ItineraryPage = () => {
         };
       })
     };
+
+    // 수정 모드에서는 즉시 UI에서만 삭제 반영
+    // 실제 이동 시간/경로 재계산은 수정 모드를 끌 때(handleToggleEditMode) 한 번에 수행
     setItinerary(updated);
   };
 
-  const handleAddActivity = (dayIndex, activity) => {
+  const handleAddActivity = async (dayIndex, activity) => {
     if (!itinerary || !activity) return;
+
+    setEditModeLoading(true);
 
     const updated = {
       ...itinerary,
       dailySchedule: itinerary.dailySchedule.map((day, idx) => {
         if (idx !== dayIndex) return day;
         
-        // 새 활동 추가
-        const updatedActivities = [...day.activities, activity];
-        
-        // 시간순으로 정렬 (transit 활동은 제외하고 정렬)
-        updatedActivities.sort((a, b) => {
-          // transit 타입은 원래 순서 유지
-          const aIsTransit = a.type === 'transit';
-          const bIsTransit = b.type === 'transit';
-          
-          if (aIsTransit && bIsTransit) return 0;
-          if (aIsTransit) return 1; // transit을 뒤로
-          if (bIsTransit) return -1; // transit을 뒤로
-          
+        // 새 활동 추가 후 시간순으로 정렬 (모든 타입을 time 기준으로만 정렬)
+        const updatedActivities = [...day.activities, activity].sort((a, b) => {
           // 시간이 없는 경우 뒤로
           if (!a.time) return 1;
           if (!b.time) return -1;
-          
+
           // 시간 문자열 비교 (HH:MM 형식)
           return a.time.localeCompare(b.time);
         });
+
+        // 방금 추가한 activity가 기존 숙소(accommodation) 이후 시각에 위치하는 경우,
+        // 그 활동 직후에 "숙소로 돌아가는" 일정을 하나 더 자동으로 추가한다.
+        const addedIndex = updatedActivities.findIndex((act) => act === activity);
+
+        if (addedIndex >= 0) {
+          // addedIndex 이전에 있었던 마지막 숙소를 찾는다.
+          let lastAccommodationBeforeAdded = null;
+          for (let i = addedIndex - 1; i >= 0; i -= 1) {
+            if (updatedActivities[i].type === 'accommodation') {
+              lastAccommodationBeforeAdded = updatedActivities[i];
+              break;
+            }
+          }
+
+          if (lastAccommodationBeforeAdded) {
+            const returnToHotel = {
+              ...lastAccommodationBeforeAdded,
+              // 설명이 있으면 "복귀" 뉘앙스로 보정 (원래 값 없으면 그대로 둠)
+              description:
+                lastAccommodationBeforeAdded.description || '숙소로 돌아가기',
+            };
+
+            updatedActivities.splice(addedIndex + 1, 0, returnToHotel);
+          }
+        }
         
         return {
           ...day,
@@ -124,7 +144,17 @@ const ItineraryPage = () => {
       })
     };
 
-    setItinerary(updated);
+    // 새 활동을 반영한 뒤 전체 일정의 이동 시간(transit)을 다시 계산
+    try {
+      const recalculated = await recalculateItineraryTravelTime(updated);
+      setItinerary(recalculated);
+    } catch (e) {
+      console.error('활동 추가 후 이동 시간 재계산 중 오류:', e);
+      // 오류가 나더라도 최소한 활동 추가된 일정은 유지
+      setItinerary(updated);
+    } finally {
+      setEditModeLoading(false);
+    }
   };
 
   const handleSave = async () => {
@@ -132,7 +162,15 @@ const ItineraryPage = () => {
 
     const stored = localStorage.getItem('tp_user');
     if (!stored) {
-      setSaveError('일정을 저장하려면 로그인이 필요합니다.');
+      // 로그인되지 않은 상태에서 저장을 누르면
+      // 로그인 페이지로 보내고, 현재 일정을 로그인 후 자동 저장하도록 위임
+      navigate('/login', {
+        state: {
+          from: '/itinerary',
+          itinerary,
+          itineraryId
+        }
+      });
       return;
     }
 
@@ -191,6 +229,7 @@ const ItineraryPage = () => {
         if (!data || !data.ok) {
           setSaveError(data?.error || '일정 저장에 실패했습니다.');
         } else {
+          // 새로 생성된 일정 id를 상태에 저장해 이후부터는 업데이트로 동작
           setItineraryId(data.id);
         }
       }
@@ -355,7 +394,8 @@ const ItineraryPage = () => {
 
       <Box sx={{ position: 'relative', height: '100vh' }}>
         <TravelItinerary 
-          itinerary={itinerary} 
+          itinerary={itinerary}
+          itineraryId={itineraryId}
           onReplan={handleReplan} 
           loading={loading || saving} 
           isEditMode={editMode}

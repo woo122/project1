@@ -329,14 +329,124 @@ export const recalculateItineraryTravelTime = async (itinerary) => {
     })),
   };
 
-  return await enrichItineraryWithTravelTime(baseItinerary);
+  const enriched = await enrichItineraryWithTravelTime(baseItinerary);
+  return normalizeItineraryTimes(enriched);
 };
 
 // 시간 계산 헬퍼 함수
 const calculateArrivalTime = (startTime, duration) => {
-  const [hours, minutes] = startTime.split(':').map(Number);
+  if (!startTime) return '';
+  const str = String(startTime).trim();
+  if (!str) return '';
+
+  const parts = str.split(':');
+  const hoursPart = parts[0];
+  const minutesPart = parts[1] != null && parts[1] !== '' ? parts[1] : '00';
+
+  const hours = Number(hoursPart);
+  const minutes = Number(minutesPart);
+  if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+    return str;
+  }
+
   const totalMinutes = hours * 60 + minutes + (duration * 60);
   const newHours = Math.floor(totalMinutes / 60) % 24;
   const newMinutes = Math.floor(totalMinutes % 60);
   return `${String(newHours).padStart(2, '0')}:${String(newMinutes).padStart(2, '0')}`;
+};
+
+// 일정의 각 날짜별 활동 시작 시간을 duration 기준으로 다시 계산하여 연속적으로 배치
+const normalizeItineraryTimes = (itinerary) => {
+  if (!itinerary || !Array.isArray(itinerary.dailySchedule)) return itinerary;
+
+  const parseTimeToMinutes = (time) => {
+    if (!time) return 8 * 60; // 기본 08:00
+    const str = String(time).trim();
+    if (!str) return 8 * 60;
+    const parts = str.split(':');
+    const hoursPart = parts[0];
+    const minutesPart = parts[1] != null && parts[1] !== '' ? parts[1] : '00';
+    const h = Number(hoursPart);
+    const m = Number(minutesPart);
+    if (Number.isNaN(h) || Number.isNaN(m)) return 8 * 60;
+    return h * 60 + m;
+  };
+
+  const formatMinutesToTime = (minutesTotal) => {
+    const minutes = ((minutesTotal % (24 * 60)) + (24 * 60)) % (24 * 60);
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  const getDefaultDuration = (activity) => {
+    if (typeof activity.duration === 'number' && activity.duration > 0) {
+      return activity.duration;
+    }
+    switch (activity.type) {
+      case 'meal':
+        return 1; // 1시간
+      case 'attraction':
+        return 2; // 2시간
+      case 'airport':
+        return 1; // 1시간
+      case 'accommodation':
+        return 0.5; // 30분
+      case 'custom':
+        return 1; // 1시간
+      case 'transit':
+        return activity.duration || 0; // 이미 계산된 이동 시간 사용
+      default:
+        return activity.duration || 1;
+    }
+  };
+
+  const normalizedSchedule = itinerary.dailySchedule.map((day) => {
+    const activities = Array.isArray(day.activities) ? [...day.activities] : [];
+    if (activities.length === 0) return day;
+
+    // 첫 활동의 시간을 기준으로 나머지를 재배치
+    const firstTimeMinutes = parseTimeToMinutes(activities[0].time || '08:00');
+    let currentMinutes = firstTimeMinutes;
+
+    const timedActivities = activities.map((activity) => {
+      const updated = { ...activity };
+
+      // 각 활동 시작 시간을 현재 시각으로 설정 (숙소 포함, 고정 시간 해제)
+      updated.time = formatMinutesToTime(currentMinutes);
+
+      const durationHours = getDefaultDuration(updated);
+      currentMinutes += Math.round(durationHours * 60);
+
+      return updated;
+    });
+
+    // 연속된 숙소(accommodation)는 하나로 압축 (예: 숙소 → 숙소 인 경우 하나만 남김)
+    const collapsedActivities = [];
+    for (let i = 0; i < timedActivities.length; i += 1) {
+      const current = timedActivities[i];
+      const prev = collapsedActivities[collapsedActivities.length - 1];
+
+      if (
+        prev &&
+        prev.type === 'accommodation' &&
+        current.type === 'accommodation'
+      ) {
+        // 이전이 숙소이고 현재도 숙소면, 이전 숙소만 유지하고 현재 것은 건너뜀
+        continue;
+      }
+
+      collapsedActivities.push(current);
+    }
+
+    return {
+      ...day,
+      activities: collapsedActivities,
+    };
+  });
+
+  return {
+    ...itinerary,
+    dailySchedule: normalizedSchedule,
+  };
 };
